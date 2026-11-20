@@ -1,18 +1,19 @@
 --- a/chrome/browser/ui/ui_features.h
 +++ b/chrome/browser/ui/ui_features.h
-@@ -24,6 +24,9 @@ BASE_DECLARE_FEATURE(kBookmarkOpenAllCon
+@@ -24,6 +24,10 @@ BASE_DECLARE_FEATURE(kBookmarkOpenAllCon
  BASE_DECLARE_FEATURE(kUseActionsForBrowserCommands);
  bool ShouldUseActionsForBrowserCommands();
  
 +BASE_DECLARE_FEATURE(kHeliumNativeFrameMaterials);
 +bool HeliumNativeFrameAvailable();
++BASE_DECLARE_FEATURE(kHeliumFloatingTabStripMaterials);
 +
  BASE_DECLARE_FEATURE(kAllowEyeDropperWGCScreenCapture);
  
  BASE_DECLARE_FEATURE(kCtrlTabMru);
 --- a/chrome/browser/ui/ui_features.cc
 +++ b/chrome/browser/ui/ui_features.cc
-@@ -26,6 +26,12 @@ BASE_FEATURE(kBookmarkOpenAllConfirmatio
+@@ -26,6 +26,17 @@ BASE_FEATURE(kBookmarkOpenAllConfirmatio
  // TODO: Re-enable once Helium's browser commands are migrated to actions.
  BASE_FEATURE(kUseActionsForBrowserCommands, base::FEATURE_DISABLED_BY_DEFAULT);
  
@@ -22,23 +23,30 @@
 +  return base::FeatureList::IsEnabled(kHeliumNativeFrameMaterials);
 +}
 +
++// Blurring the web contents below the floating tab strip may be costly, so it
++// stays opaque unless this is enabled too.
++BASE_FEATURE(kHeliumFloatingTabStripMaterials,
++             base::FEATURE_DISABLED_BY_DEFAULT);
++
  // Enables the use of WGC for the Eye Dropper screen capture.
  BASE_FEATURE(kAllowEyeDropperWGCScreenCapture,
  #if BUILDFLAG(IS_WIN)
 --- a/chrome/browser/helium_flag_choices.h
 +++ b/chrome/browser/helium_flag_choices.h
-@@ -42,6 +42,8 @@ constexpr const char kDisableEchCommandL
+@@ -42,6 +42,10 @@ constexpr const char kDisableEchCommandL
  constexpr const char kHeliumSplitClientHelloCommandLine[] =
      "helium-split-clienthello";
  
 +constexpr const char kHeliumNativeFrameMaterialsCommandLine[] =
 +    "helium-native-frame-materials";
++constexpr const char kHeliumFloatingTabStripMaterialsCommandLine[] =
++    "helium-floating-tab-strip-materials";
  }  // namespace helium
  
  #endif /* CHROME_BROWSER_HELIUM_FLAG_CHOICES_H_ */
 --- a/chrome/browser/helium_flag_entries.h
 +++ b/chrome/browser/helium_flag_entries.h
-@@ -75,5 +75,9 @@
+@@ -75,5 +75,16 @@
       "prevent access to networks that require a proxy. Helium flag.",
       kOsAll, SINGLE_VALUE_TYPE(switches::kNoProxyServer)},
      // ui
@@ -46,6 +54,13 @@
 +     "Enables an option to apply native materials to the browser frame "
 +     "surfaces. May cause UI clarity issues. Helium flag.",
 +     kOsDesktop, FEATURE_VALUE_TYPE(features::kHeliumNativeFrameMaterials)},
++    {helium::kHeliumFloatingTabStripMaterialsCommandLine,
++     "[Native frame materials] Floating tab strip",
++     "Applies native materials to the vertical tab strip while it floats over "
++     "the page, instead of keeping it opaque. May affect performance. Helium "
++     "flag.",
++     kOsDesktop,
++     FEATURE_VALUE_TYPE(features::kHeliumFloatingTabStripMaterials)},
      // platform
  #endif  // CHROME_BROWSER_HELIUM_FLAG_ENTRIES_H_
 --- a/chrome/common/pref_names.h
@@ -156,7 +171,7 @@
          pref-key="browser.show_home_button" label="$i18n{showHomeButton}"
 --- /dev/null
 +++ b/chrome/browser/ui/views/helium/native_frame_materials.h
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,89 @@
 +// Copyright 2026 The Helium Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
@@ -181,6 +196,10 @@
 +bool ShouldUseNativeFrameMaterials(const BrowserView* browser_view);
 +bool ShouldUseNativeFrameMaterials(const BrowserWindowInterface* browser);
 +bool ShouldUseNativeFrameMaterials(const views::View* view);
++
++// Whether surfaces that float over web contents, such as the floating vertical
++// tab strip, show the material too. Otherwise they stay opaque.
++bool ShouldUseFloatingNativeFrameMaterials(const views::View* view);
 +
 +// Whether the platform implements the material for |browser_view|.
 +bool PlatformSupportsNativeFrameMaterials(const BrowserView& browser_view);
@@ -244,7 +263,7 @@
 +#endif  // CHROME_BROWSER_UI_VIEWS_HELIUM_NATIVE_FRAME_MATERIALS_H_
 --- /dev/null
 +++ b/chrome/browser/ui/views/helium/native_frame_materials.cc
-@@ -0,0 +1,200 @@
+@@ -0,0 +1,207 @@
 +// Copyright 2026 The Helium Authors
 +// You can use, redistribute, and/or modify this source code under
 +// the terms of the GPL-3.0 license that can be found in the LICENSE file.
@@ -254,6 +273,7 @@
 +#include <algorithm>
 +
 +#include "base/command_line.h"
++#include "base/feature_list.h"
 +#include "chrome/browser/profiles/profile.h"
 +#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 +#include "chrome/browser/ui/color/chrome_color_id.h"
@@ -339,6 +359,12 @@
 +             : nullptr);
 +}
 +
++bool ShouldUseFloatingNativeFrameMaterials(const views::View* view) {
++  return base::FeatureList::IsEnabled(
++             features::kHeliumFloatingTabStripMaterials) &&
++         ShouldUseNativeFrameMaterials(view);
++}
++
 +bool IsNativeFrameMaterialDark(SkColor toolbar_color) {
 +  return color_utils::IsDark(toolbar_color);
 +}
@@ -410,7 +436,7 @@
 +
 +std::optional<SkColor> GetNativeFrameMaterialFloatingColor(
 +    const views::View* view) {
-+  if (!ShouldUseNativeFrameMaterials(view)) {
++  if (!ShouldUseFloatingNativeFrameMaterials(view)) {
 +    return std::nullopt;
 +  }
 +
@@ -762,7 +788,7 @@
    for (const auto& lock : hover_locks_) {
      lock->ClearRegionViewOnDestruction();
    }
-@@ -407,6 +424,151 @@ void VerticalTabStripRegionView::SetFloa
+@@ -407,6 +424,153 @@ void VerticalTabStripRegionView::SetFloa
  
    background->SetCorners(corners);
    background->SetOutline(outline);
@@ -815,7 +841,7 @@
 +  return floating_style_ != FloatingStyle::kNone &&
 +         floating_style_ != FloatingStyle::kDetached &&
 +         !helium::HasVibrantNativeFrameMaterial() &&
-+         helium::ShouldUseNativeFrameMaterials(this);
++         helium::ShouldUseFloatingNativeFrameMaterials(this);
 +}
 +
 +void VerticalTabStripRegionView::UpdateContentsClip() {
@@ -856,8 +882,10 @@
 +  // it has the tint already, which would otherwise show twice.
 +  // Where the tab strip shows the frame material, as without a vibrant one, it
 +  // paints none of its own, which would show twice.
-+  const bool shows_frame_material = !helium::HasVibrantNativeFrameMaterial() &&
-+                                    floating_style_ != FloatingStyle::kDetached;
++  const bool shows_frame_material =
++      !helium::HasVibrantNativeFrameMaterial() &&
++      floating_style_ != FloatingStyle::kDetached &&
++      helium::ShouldUseFloatingNativeFrameMaterials(this);
 +  const float material_opacity =
 +      shows_frame_material
 +          ? 0.0f
@@ -914,7 +942,7 @@
  }
  
  void VerticalTabStripRegionView::AddedToWidget() {
-@@ -492,6 +654,7 @@ void VerticalTabStripRegionView::Layout(
+@@ -492,6 +656,7 @@ void VerticalTabStripRegionView::Layout(
        gfx::Rect(resize_area_x, 0, resize_area_width_, bounds().height()));
    UpdateResizeAreaVisibility();
    shadow_frame_->SetBoundsRect(GetLocalBounds());
@@ -922,7 +950,7 @@
  
    // Ensure that we update the drop arrow position so that it does not render in
    // the collapsed state when expand on hover is active.
-@@ -810,6 +973,7 @@ bool VerticalTabStripRegionView::IsColla
+@@ -810,6 +975,7 @@ bool VerticalTabStripRegionView::IsColla
  
  void VerticalTabStripRegionView::RequestCollapse(bool collapse) {
    target_collapse_state_.collapsed = collapse;

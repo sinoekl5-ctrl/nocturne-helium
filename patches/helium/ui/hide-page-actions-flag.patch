@@ -1,9 +1,9 @@
 --- a/chrome/browser/helium_flag_choices.h
 +++ b/chrome/browser/helium_flag_choices.h
-@@ -44,6 +44,8 @@ constexpr const char kHeliumSplitClientH
- 
- constexpr const char kHeliumNativeFrameMaterialsCommandLine[] =
+@@ -46,6 +46,8 @@ constexpr const char kHeliumNativeFrameM
      "helium-native-frame-materials";
+ constexpr const char kHeliumFloatingTabStripMaterialsCommandLine[] =
+     "helium-floating-tab-strip-materials";
 +constexpr const char kHeliumHidePageActionsCommandLine[] =
 +    "helium-hide-page-actions";
  }  // namespace helium
@@ -11,10 +11,10 @@
  #endif /* CHROME_BROWSER_HELIUM_FLAG_CHOICES_H_ */
 --- a/chrome/browser/helium_flag_entries.h
 +++ b/chrome/browser/helium_flag_entries.h
-@@ -79,5 +79,10 @@
-      "Enables an option to apply native materials to the browser frame "
-      "surfaces. May cause UI clarity issues. Helium flag.",
-      kOsDesktop, FEATURE_VALUE_TYPE(features::kHeliumNativeFrameMaterials)},
+@@ -86,5 +86,10 @@
+      "flag.",
+      kOsDesktop,
+      FEATURE_VALUE_TYPE(features::kHeliumFloatingTabStripMaterials)},
 +    {helium::kHeliumHidePageActionsCommandLine, "Hide all page actions",
 +     "Hides all page actions at the end of address bar. This includes: "
 +     "bookmark star, page zoom, PWA install/open, local file access, and more. "
@@ -35,9 +35,9 @@
  }
 --- a/chrome/browser/ui/ui_features.h
 +++ b/chrome/browser/ui/ui_features.h
-@@ -27,6 +27,8 @@ bool ShouldUseActionsForBrowserCommands(
- BASE_DECLARE_FEATURE(kHeliumNativeFrameMaterials);
+@@ -28,6 +28,8 @@ BASE_DECLARE_FEATURE(kHeliumNativeFrameM
  bool HeliumNativeFrameAvailable();
+ BASE_DECLARE_FEATURE(kHeliumFloatingTabStripMaterials);
  
 +BASE_DECLARE_FEATURE(kHeliumHidePageActions);
 +
