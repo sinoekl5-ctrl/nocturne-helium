@@ -265,6 +265,7 @@ helium/core/pins/persistent-pins-pref.patch
 
 helium/core/containers/flag.patch
 helium/core/containers/clear-data.patch
+helium/core/containers/pins.patch
 
 helium/settings/settings-page-icons.patch
 helium/settings/move-search-suggest.patch
