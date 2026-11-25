@@ -56,7 +56,7 @@
  #include "ui/base/metadata/metadata_impl_macros.h"
  #include "ui/base/resource/resource_bundle.h"
  #include "ui/base/theme_provider.h"
-@@ -50,11 +52,12 @@
+@@ -50,6 +52,8 @@
  namespace {
  
  constexpr int kAttentionIndicatorRadius = 3;
@@ -64,15 +64,8 @@
 +constexpr float kDiscardedFaviconOpacity = 0.5f;
  constexpr int kLoadingAnimationStrokeWidthDp = 2;
  
--bool NetworkStateIsAnimated(tabs::TabNetworkState network_state) {
--  return network_state != tabs::TabNetworkState::kNone &&
--         network_state != tabs::TabNetworkState::kError;
-+bool NetworkStateIsAnimated(tabs::TabNetworkState) {
-+  return false;
- }
- 
- }  // namespace
-@@ -126,7 +129,7 @@ void TabIcon::SetData(const tabs::TabDat
+ bool NetworkStateIsAnimated(tabs::TabNetworkState network_state) {
+@@ -126,7 +130,7 @@ void TabIcon::SetData(const tabs::TabDat
    SetIcon(data.favicon, data.should_themify_favicon);
    SetNetworkState(data.network_state);
    SetCrashed(data.is_crashed);
@@ -81,7 +74,7 @@
    has_tab_data_ = true;
  
    UpdateThrobber();
-@@ -194,12 +197,7 @@ void TabIcon::StepLoadingAnimation(const
+@@ -194,12 +198,7 @@ void TabIcon::StepLoadingAnimation(const
    }
  }
  
@@ -95,7 +88,7 @@
  
  void TabIcon::OnDiscardRingTreatmentEnabledChanged() {
    discard_ring_treatment_enabled_ =
-@@ -212,13 +210,8 @@ void TabIcon::OnDiscardRingTreatmentEnab
+@@ -212,13 +211,8 @@ void TabIcon::OnDiscardRingTreatmentEnab
      was_discard_indicator_shown_ = show_discard_indicator;
  
      // Directly set animations to their end states and do not animate.
@@ -111,19 +104,26 @@
      SchedulePaint();
    }
  }
-@@ -242,8 +235,9 @@ void TabIcon::OnPaint(gfx::Canvas* canva
+@@ -238,12 +232,15 @@ void TabIcon::OnPaint(gfx::Canvas* canva
+       std::min(gfx::kFaviconSize, contents_bounds.width()),
+       std::min(gfx::kFaviconSize, contents_bounds.height()));
+ 
+-  // Don't paint the attention indicator during the loading animation.
++  // Don't paint the attention indicator or the dimmed favicon during the
++  // loading animation, e.g. while a hibernated tab wakes up.
    if (!GetShowingLoadingAnimation() && GetShowingAttentionIndicator() &&
        !should_display_crashed_favicon_) {
      PaintAttentionIndicatorAndIcon(canvas, GetIconToPaint(), icon_bounds);
 -  } else if (was_discard_indicator_shown_) {
 -    PaintDiscardRingAndIcon(canvas, GetIconToPaint(), icon_bounds);
-+  } else if (was_discard_indicator_shown_ ||
-+             tab_discard_animation_.is_animating()) {
++  } else if (!GetShowingLoadingAnimation() &&
++             (was_discard_indicator_shown_ ||
++              tab_discard_animation_.is_animating())) {
 +    PaintDiscardedFavicon(canvas, GetIconToPaint(), icon_bounds);
    } else {
      MaybePaintFavicon(canvas, GetIconToPaint(), icon_bounds);
    }
-@@ -310,30 +304,46 @@ void TabIcon::PaintAttentionIndicatorAnd
+@@ -310,30 +307,46 @@ void TabIcon::PaintAttentionIndicatorAnd
    canvas->DrawCircle(circle_center, kAttentionIndicatorRadius, indicator_flags);
  }
  
@@ -194,17 +194,17 @@
  }
  
  void TabIcon::PaintLoadingAnimation(gfx::Canvas* canvas, gfx::Rect bounds) {
-@@ -389,8 +399,7 @@ void TabIcon::MaybePaintFavicon(gfx::Can
+@@ -389,8 +402,7 @@ void TabIcon::MaybePaintFavicon(gfx::Can
  
    std::unique_ptr<gfx::ScopedCanvas> scoped_canvas;
  
 -  if (GetShowingLoadingAnimation() || favicon_size_animation_.is_animating() ||
 -      was_discard_indicator_shown_) {
-+  if ((false)) {
++  if (GetShowingLoadingAnimation() || favicon_size_animation_.is_animating()) {
      scoped_canvas = std::make_unique<gfx::ScopedCanvas>(canvas);
      // The favicon is initially inset with the width of the loading-animation
      // stroke + an additional dp to create some visual separation.
-@@ -435,14 +444,6 @@ void TabIcon::MaybePaintFavicon(gfx::Can
+@@ -435,14 +447,6 @@ void TabIcon::MaybePaintFavicon(gfx::Can
    canvas->DrawImageInt(icon, 0, 0, bounds.width(), bounds.height(), bounds.x(),
                         bounds.y(), bounds.width(), bounds.height(),
                         /*filter=*/true);
@@ -219,7 +219,7 @@
  }
  
  bool TabIcon::GetNonDefaultFavicon() const {
-@@ -469,31 +470,12 @@ void TabIcon::SetDiscarded(bool discarde
+@@ -469,39 +473,21 @@ void TabIcon::SetDiscarded(bool discarde
        is_discarded_ && discard_ring_treatment_enabled_;
    if (was_discard_indicator_shown_ != show_discard_indicator) {
      was_discard_indicator_shown_ = show_discard_indicator;
@@ -254,17 +254,17 @@
      }
    }
  }
-@@ -549,6 +531,10 @@ bool TabIcon::GetCrashed() const {
- }
  
- void TabIcon::UpdateThrobber() {
-+  if (!tab_discard_animation_.is_animating() && !layer()) {
-+    return;
-+  }
-+
-   TRACE_EVENT0("ui", "TabIcon::UpdateThrobber");
-   base::ScopedUmaHistogramTimer timer(
-       "Tab.Icon.UpdateThrobber.Time",
+ void TabIcon::SetNetworkState(tabs::TabNetworkState network_state) {
+-  const bool was_animated = NetworkStateIsAnimated(network_state_);
++  // Only resize the favicon around a visible loading animation.
++  const bool was_animated = GetShowingLoadingAnimation();
+   network_state_ = network_state;
+-  const bool is_animated = NetworkStateIsAnimated(network_state_);
++  const bool is_animated = GetShowingLoadingAnimation();
+   if (was_animated != is_animated) {
+     favicon_size_animation_.SetSlideDuration(
+         gfx::Animation::RichAnimationDuration(base::Milliseconds(250)));
 --- a/chrome/browser/ui/views/tabs/tab/tab_icon.h
 +++ b/chrome/browser/ui/views/tabs/tab/tab_icon.h
 @@ -113,10 +113,11 @@ class TabIcon : public views::View, publ
