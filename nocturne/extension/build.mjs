@@ -38,8 +38,10 @@ $command: {
       manifest_version: 3, name: "Nocturne start page", version: "0.1.0",
       description: "A quiet start page that follows the time of day.",
       permissions: ["search"], chrome_url_overrides: { newtab: "newtab.html" },
+      options_ui: { page: "settings.html", open_in_tab: true },
     }, null, 2),
     "newtab/newtab.html": html,
+    "newtab/settings.html": html.replace("<html ", '<html data-start-view="settings" '),
     "newtab/newtab.js": script + command + wiring,
     "theme/manifest.json": JSON.stringify({
       manifest_version: 3, name: "Nocturne Night", version: "0.1.0",

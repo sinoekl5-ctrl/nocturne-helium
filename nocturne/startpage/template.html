@@ -76,6 +76,10 @@ button.plain:hover{ color:var(--text); }
 .field{ font:11.5px/16px var(--ui); color:var(--text); background:var(--raised); border:1px solid var(--line); border-radius:8px; padding:5px 8px; margin-inline-start:6px; }
 .hours{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
 .hours[hidden]{ display:none; }
+.intro{ display:none; color:var(--text-2); margin:-12px 0 24px; }
+:root[data-view="welcome"] .intro{ display:block; }
+:root[data-view="start"] .choice{ display:none; }
+:root:not([data-view="start"]) #open-settings{ display:none; }
 .test{ margin-top:14px; display:flex; gap:8px; justify-content:center; align-items:center; font-size:11.5px; color:var(--text-2); }
 @media (prefers-reduced-motion:reduce){
   body{ transition-duration:100ms; }
@@ -90,13 +94,14 @@ button.plain:hover{ color:var(--text); }
 <main>
   <p class="mark">Nocturne</p>
   <h1 id="greeting">One light is enough.</h1>
+  <p class="intro">Choose your room. You can change it later in Settings.</p>
   <div class="bar" id="bar">
     <input class="command" id="command" dir="auto" type="text" autocomplete="off" spellcheck="false"
            placeholder="Search or enter address" aria-label="Search or enter address">
   </div>
   <p class="quiet">Nothing here yet.</p>
   <div class="row">
-    <div class="dots" role="group" aria-label="Mood">
+    <div class="dots choice" role="group" aria-label="Mood">
       <button class="dot" data-mood="atelier" aria-label="Atelier" title="Atelier" aria-pressed="false"></button>
       <button class="dot" data-mood="gambit" aria-label="Gambit" title="Gambit" aria-pressed="false"></button>
       <button class="dot" data-mood="vigil" aria-label="Vigil" title="Vigil" aria-pressed="false"></button>
@@ -104,10 +109,11 @@ button.plain:hover{ color:var(--text); }
       <button class="dot" data-mood="ember" aria-label="Ember" title="Ember" aria-pressed="false"></button>
     </div>
     <span class="phase" id="phase" aria-live="polite"></span>
-    <button class="plain" id="save">Keep this</button>
+    <button class="plain choice" id="save">Done</button>
+    <button class="plain" id="open-settings">Settings</button>
   </div>
-  <p class="quiet" id="mood-note" aria-live="polite"></p>
-  <details class="settings" id="settings">
+  <p class="quiet choice" id="mood-note" aria-live="polite"></p>
+  <details class="settings choice" id="settings">
     <summary>Appearance</summary>
     <label for="mode">Theme</label>
     <select class="field" id="mode">
@@ -125,7 +131,7 @@ button.plain:hover{ color:var(--text); }
     </div>
     <p id="settings-note" aria-live="polite"></p>
   </details>
-  <div class="test">
+  <div class="test choice">
     <label for="time">Preview time</label>
     <input class="time time" id="time" type="time">
     <button class="plain" id="auto">Auto</button>
@@ -156,6 +162,12 @@ button.plain:hover{ color:var(--text); }
   const MODE_LABEL = { auto: "auto", system: "follows system", night: "always night", day: "always day", custom: "custom hours" };
   const EDITABLE = ["dawn", "day", "dusk", "night"];
 
+  function restoreMood() {
+    const saved = recall();
+    state.mood = saved && TOKENS.moods[saved] ? saved : null;
+    document.querySelectorAll(".dot").forEach((o) => o.setAttribute("aria-pressed", String(o.dataset.mood === state.mood)));
+  }
+
   function showSettings() {
     $("mode").value = settings.mode;
     $("hours").hidden = settings.mode !== "custom";
@@ -166,6 +178,16 @@ button.plain:hover{ color:var(--text); }
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(settings)); $("settings-note").textContent = "Saved."; }
     catch { $("settings-note").textContent = "This browser could not save the setting."; }
+  }
+
+  // Views: "welcome" on the very first run, then a clean "start". Choices live in "settings".
+  const SETUP = "nocturne-setup";
+  const isSetUp = () => { try { return localStorage.getItem(SETUP) === "done"; } catch { return false; } };
+  let view = root.dataset.startView || (isSetUp() ? "start" : "welcome");
+  function show(next) {
+    view = next;
+    root.setAttribute("data-view", view);
+    if (view !== "start") $("settings").open = true;
   }
 
   function apply() {
@@ -196,7 +218,12 @@ button.plain:hover{ color:var(--text); }
   });
 
   // One slow pulse after a save, never a loop. Skipped when the system asks for less motion.
+  $("open-settings").addEventListener("click", () => show("settings"));
   $("save").addEventListener("click", () => {
+    try { localStorage.setItem(SETUP, "done"); } catch {}
+    state.override = null;
+    show("start");
+    apply();
     if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const bar = $("bar");
     bar.classList.remove("beat");
@@ -210,11 +237,8 @@ button.plain:hover{ color:var(--text); }
   $("time").addEventListener("input", (e) => { state.override = parseTime(e.target.value); apply(); });
   $("auto").addEventListener("click", () => { state.override = null; apply(); });
 
-  const saved = recall();
-  if (saved && TOKENS.moods[saved]) {
-    state.mood = saved;
-    document.querySelectorAll(".dot").forEach((o) => o.setAttribute("aria-pressed", String(o.dataset.mood === saved)));
-  }
+  restoreMood();
+  show(view);
 
   $("mode").addEventListener("change", (e) => {
     settings = cleanSettings({ mode: e.target.value, starts: settings.starts });
@@ -231,7 +255,12 @@ button.plain:hover{ color:var(--text); }
     save(); apply();
   });
   // Another open tab changed the setting or the mood.
-  window.addEventListener("storage", () => { settings = loadSettings(); showSettings(); apply(); });
+  window.addEventListener("storage", () => {
+    settings = loadSettings();
+    restoreMood();
+    if (view === "welcome" && isSetUp()) show("start");
+    showSettings(); apply();
+  });
   if (dark && dark.addEventListener) dark.addEventListener("change", apply);
   showSettings();
 
