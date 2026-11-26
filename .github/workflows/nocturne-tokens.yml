@@ -1,0 +1,22 @@
+name: nocturne-tokens
+
+on:
+  pull_request:
+    paths:
+      - 'nocturne/**'
+      - '.github/workflows/nocturne-tokens.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'nocturne/**'
+
+jobs:
+  tokens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Token and contrast tests
+        run: python -m unittest discover -s nocturne/tests -v

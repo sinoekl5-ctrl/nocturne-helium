@@ -1,0 +1,17 @@
+Nocturne
+
+Nocturne is a derivative of Helium (https://github.com/imputnet/helium), which
+is licensed under GPL-3.0. Nocturne is therefore also GPL-3.0, with source
+published. See LICENSE.
+
+This repository contains patches that Helium imported from other projects. Each
+keeps its own license:
+  - ungoogled-chromium (BSD 3-Clause): see LICENSE.ungoogled_chromium
+  - Inox patchset, Debian, Bromite, Iridium Browser, Brave: see the folders under
+    patches/ and the original projects
+  - Chromium itself (BSD-style license and third-party licenses): downloaded at
+    build time
+
+The names, logos and icons of Helium, Chromium and the other projects belong to
+their owners. Nocturne does not claim them. Nocturne must ship with its own
+name, app ID and icons before any release.
