@@ -88,23 +88,27 @@ function mixValue(a, b, t) {
 }
 
 // ---------- Tokens for one phase ----------
-export function phaseTokens(tokens, phase) {
+// A mood (the Space's own accent and grain) applies only to the night phases, and never in deep night,
+// because deep night is always Vigil. Day phases keep their own accent so text stays readable.
+export function phaseTokens(tokens, phase, mood) {
   const p = tokens.phases[phase];
-  return { ...tokens.themes[p.theme], ...p.override };
+  const out = { ...tokens.themes[p.theme], ...p.override };
+  if (mood && p.theme === "night" && phase !== "deep-night" && tokens.moods[mood]) Object.assign(out, tokens.moods[mood]);
+  return out;
 }
 
 // Everything the UI needs for a given minute of the day.
 // Inside the last 30 minutes before a boundary, every token is blended to the next phase.
-export function resolve(tokens, minutes, starts) {
+export function resolve(tokens, minutes, starts, mood) {
   const s = normalise(starts);
   const m = ((minutes % DAY) + DAY) % DAY;
   const phase = phaseAt(m, s);
   const next = PHASE_ORDER[(PHASE_ORDER.indexOf(phase) + 1) % PHASE_ORDER.length];
   const nextStart = next === "deep-night" ? DAY : s[next];
   const left = nextStart - m; // minutes until the next boundary
-  const from = phaseTokens(tokens, phase);
+  const from = phaseTokens(tokens, phase, mood);
   if (left > BLEND_MINUTES) return { phase, theme: tokens.phases[phase].theme, blend: 0, vars: from };
-  const to = phaseTokens(tokens, next);
+  const to = phaseTokens(tokens, next, mood);
   const t = 1 - left / BLEND_MINUTES;
   const vars = {};
   for (const k of new Set([...Object.keys(from), ...Object.keys(to)])) vars[k] = mixValue(from[k], to[k], t);
