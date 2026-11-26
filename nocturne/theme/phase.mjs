@@ -87,13 +87,44 @@ function mixValue(a, b, t) {
   return t < 0.5 ? a : b;
 }
 
+// ---------- Readability guard ----------
+// Blending a dark room into a light one passes through mid-grey, where text and background would meet.
+// Any foreground that falls under its minimum is pushed toward black or white, only as far as needed.
+const luminance = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  return 0.2126 * toLin((n >> 16) & 255) + 0.7152 * toLin((n >> 8) & 255) + 0.0722 * toLin(n & 255);
+};
+export function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+export const MIN_CONTRAST = { text: 4.5, "text-2": 4.5, info: 4.5, accent: 3 };
+const BACKGROUNDS = ["bg", "surface", "raised"];
+
+export function keepReadable(vars) {
+  const out = { ...vars };
+  const worst = (fg) => Math.min(...BACKGROUNDS.map((k) => contrast(fg, out[k])));
+  const pole = worst("#000000") >= worst("#FFFFFF") ? "#000000" : "#FFFFFF";
+  // At mid-grey even pure black or white can fall short, so nudge those backgrounds away from it.
+  const away = pole === "#000000" ? "#FFFFFF" : "#000000";
+  for (const key of BACKGROUNDS) {
+    const start = out[key];
+    for (let i = 1; i <= 100 && contrast(pole, out[key]) < MIN_CONTRAST.text + 0.05; i++) out[key] = mixHex(start, away, i / 100);
+  }
+  for (const [key, min] of Object.entries(MIN_CONTRAST)) {
+    const start = out[key];
+    for (let i = 1; i <= 100 && worst(out[key]) < min; i++) out[key] = mixHex(start, pole, i / 100);
+  }
+  return out;
+}
+
 // ---------- Tokens for one phase ----------
-// A mood (the Space's own accent and grain) applies only to the night phases, and never in deep night,
-// because deep night is always Vigil. Day phases keep their own accent so text stays readable.
+// A Space's mood keeps its own colours and grain by day and by night, while the phase sets the base
+// brightness (brief page 5). Deep night is always Vigil, so no mood applies there.
 export function phaseTokens(tokens, phase, mood) {
   const p = tokens.phases[phase];
   const out = { ...tokens.themes[p.theme], ...p.override };
-  if (mood && p.theme === "night" && phase !== "deep-night" && tokens.moods[mood]) Object.assign(out, tokens.moods[mood]);
+  if (phase !== "deep-night" && tokens.moods[mood]) Object.assign(out, tokens.moods[mood][p.theme]);
   return out;
 }
 
@@ -112,7 +143,7 @@ export function resolve(tokens, minutes, starts, mood) {
   const t = 1 - left / BLEND_MINUTES;
   const vars = {};
   for (const k of new Set([...Object.keys(from), ...Object.keys(to)])) vars[k] = mixValue(from[k], to[k], t);
-  return { phase, theme: tokens.phases[phase].theme, blend: t, vars };
+  return { phase, theme: tokens.phases[phase].theme, blend: t, vars: keepReadable(vars) };
 }
 
 export function toCss(vars) {
