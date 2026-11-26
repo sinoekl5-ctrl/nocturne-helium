@@ -117,3 +117,29 @@ test("broken saved settings fall back to auto", () => {
   assert.equal(r.els.mode.value, "auto");
   assert.equal(r.attrs["data-phase"], "day");
 });
+
+test("choices show on the first run only, then live in Settings", () => {
+  const store = {};
+  const first = run("", store);
+  assert.equal(first.attrs["data-view"], "welcome");
+  first.els.save.on.click();
+  assert.equal(first.attrs["data-view"], "start");
+  const next = run("", store);
+  assert.equal(next.attrs["data-view"], "start");
+  next.els["open-settings"].on.click();
+  assert.equal(next.attrs["data-view"], "settings");
+});
+
+test("Done drops a preview time and goes back to the real clock", () => {
+  const r = run("?nocturne-time=03:00");
+  r.els.save.on.click();
+  assert.match(r.els.phase.textContent, /· auto$/);
+});
+
+test("without storage the page still works", () => {
+  const broken = new Proxy({}, { get() { throw new Error("blocked"); } });
+  const r = run("", broken);
+  assert.equal(r.attrs["data-view"], "welcome");
+  r.els.save.on.click();
+  assert.equal(r.attrs["data-view"], "start");
+});

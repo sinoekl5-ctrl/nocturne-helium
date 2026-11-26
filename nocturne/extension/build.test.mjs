@@ -23,6 +23,8 @@ test("manifests: only the search permission, and the theme is a pure theme", () 
   const page = JSON.parse(out["newtab/manifest.json"]);
   assert.deepEqual(page.permissions, ["search"]);
   assert.equal(page.chrome_url_overrides.newtab, "newtab.html");
+  assert.equal(page.options_ui.page, "settings.html");
+  assert.match(out["newtab/settings.html"], /<html data-start-view="settings" /);
   const theme = JSON.parse(out["theme/manifest.json"]);
   assert.deepEqual(Object.keys(theme), ["manifest_version", "name", "version", "theme"]);
   assert.deepEqual(theme.theme.colors.frame, [14, 13, 12]);
