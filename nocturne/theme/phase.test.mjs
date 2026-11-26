@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { phaseAt, parseTime, resolve, phaseTokens, hexToOklab, oklabToHex, mixHex, toCss } from "./phase.mjs";
+import { phaseAt, parseTime, resolve, phaseTokens, hexToOklab, oklabToHex, mixHex, toCss, contrast, MIN_CONTRAST } from "./phase.mjs";
 
 const tokens = JSON.parse(readFileSync(new URL("../tokens/tokens.json", import.meta.url), "utf8"));
 const at = (hhmm) => parseTime(hhmm);
@@ -83,12 +83,26 @@ test("css output", () => {
   assert.match(toCss(resolve(tokens, at("12:00")).vars), /--bg:#EFE9DC;/);
 });
 
-test("moods change accent and grain in the evening only", () => {
-  assert.equal(resolve(tokens, at("21:00"), undefined, "vigil").vars.accent, "#E2DACB");
-  assert.equal(resolve(tokens, at("21:00"), undefined, "vigil").vars.grain, 0);
-  assert.equal(resolve(tokens, at("21:00"), undefined, "drift").vars.accent, "#7F9A9C");
-  assert.equal(resolve(tokens, at("18:00"), undefined, "gambit").vars.accent, "#B7A27C");
-  assert.deepEqual(resolve(tokens, at("12:00"), undefined, "drift").vars, phaseTokens(tokens, "day"));
-  assert.deepEqual(resolve(tokens, at("03:00"), undefined, "ember").vars, phaseTokens(tokens, "deep-night"));
-  assert.deepEqual(resolve(tokens, at("21:00")).vars, phaseTokens(tokens, "night"));
+test("every mood visibly changes the room by day and by night", () => {
+  for (const t of ["06:00", "12:00", "18:00", "21:00"]) {
+    const rooms = Object.keys(tokens.moods).map((m) => resolve(tokens, at(t), undefined, m).vars);
+    for (const k of ["bg", "surface", "accent"]) assert.equal(new Set(rooms.map((r) => r[k])).size, rooms.length, `${t} ${k}`);
+  }
+});
+
+test("deep night stays Vigil whatever the mood", () => {
+  for (const m of Object.keys(tokens.moods))
+    assert.deepEqual(resolve(tokens, at("03:00"), undefined, m).vars, phaseTokens(tokens, "deep-night"), m);
+});
+
+test("text and accent stay readable every minute of the day, in every mood", () => {
+  const bad = [];
+  for (const mood of [undefined, ...Object.keys(tokens.moods)])
+    for (let m = 0; m < 1440; m++) {
+      const v = resolve(tokens, m, undefined, mood).vars;
+      for (const [fg, min] of Object.entries(MIN_CONTRAST))
+        for (const bg of ["bg", "surface", "raised"])
+          if (contrast(v[fg], v[bg]) < min) bad.push(`${mood} ${m} ${fg}/${bg}`);
+    }
+  assert.deepEqual(bad.slice(0, 10), [], `${bad.length} failing pairs`);
 });

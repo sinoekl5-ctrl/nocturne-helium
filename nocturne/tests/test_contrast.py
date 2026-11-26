@@ -63,7 +63,7 @@ def resolve(phase=None, theme=None, mood=None):
         return out
     out = dict(TOKENS["themes"][theme])
     if mood:
-        out.update(TOKENS["moods"][mood])
+        out.update(TOKENS["moods"][mood][theme])
     return out
 
 
@@ -71,7 +71,8 @@ def all_sets():
     for p in TOKENS["phases"]:
         yield "phase:" + p, resolve(phase=p), TOKENS["phases"][p]["theme"]
     for m in TOKENS["moods"]:
-        yield "mood:" + m + "@night", resolve(theme="night", mood=m), "night"
+        for theme in ("night", "day"):
+            yield f"mood:{m}@{theme}", resolve(theme=theme, mood=m), theme
 
 
 class TokenShape(unittest.TestCase):
