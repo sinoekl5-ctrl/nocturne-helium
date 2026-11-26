@@ -74,3 +74,14 @@ test("pressing a mood dot repaints the page, and pressing it again undoes it", (
     assert.equal(drift["aria-pressed"], "false");
   }
 });
+
+test("the time field shows the real clock on auto, also after leaving a preview", () => {
+  const r = run("?nocturne-time=14:00");
+  assert.equal(r.els.time.value, "14:00");
+  assert.match(r.els.phase.textContent, /14:00 · preview$/);
+  const before = new Date();
+  r.els.auto.on.click();
+  const clock = (d) => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  assert.ok([clock(before), clock(new Date())].includes(r.els.time.value), r.els.time.value);
+  assert.match(r.els.phase.textContent, /· auto$/);
+});
