@@ -23,5 +23,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Time-of-day phase tests
-        run: node --test nocturne/theme/phase.test.mjs
+      - name: Time-of-day phase and start page tests
+        run: node --test nocturne/theme/phase.test.mjs nocturne/startpage/build.test.mjs

@@ -82,3 +82,13 @@ test("Private-space rule: deep night never has glow or grain", () => {
 test("css output", () => {
   assert.match(toCss(resolve(tokens, at("12:00")).vars), /--bg:#EFE9DC;/);
 });
+
+test("moods change accent and grain in the evening only", () => {
+  assert.equal(resolve(tokens, at("21:00"), undefined, "vigil").vars.accent, "#E2DACB");
+  assert.equal(resolve(tokens, at("21:00"), undefined, "vigil").vars.grain, 0);
+  assert.equal(resolve(tokens, at("21:00"), undefined, "drift").vars.accent, "#7F9A9C");
+  assert.equal(resolve(tokens, at("18:00"), undefined, "gambit").vars.accent, "#B7A27C");
+  assert.deepEqual(resolve(tokens, at("12:00"), undefined, "drift").vars, phaseTokens(tokens, "day"));
+  assert.deepEqual(resolve(tokens, at("03:00"), undefined, "ember").vars, phaseTokens(tokens, "deep-night"));
+  assert.deepEqual(resolve(tokens, at("21:00")).vars, phaseTokens(tokens, "night"));
+});
