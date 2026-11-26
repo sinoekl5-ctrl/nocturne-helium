@@ -113,6 +113,9 @@ button.plain:hover{ color:var(--text); }
   const root = document.documentElement;
   const $ = (id) => document.getElementById(id);
   const state = { override: null, mood: null };
+  // The chosen mood is remembered for the next new tab. Storage can be unavailable, so it is optional.
+  const remember = (v) => { try { localStorage.setItem("nocturne-mood", v || ""); } catch {} };
+  const recall = () => { try { return localStorage.getItem("nocturne-mood"); } catch { return null; } };
   const GREETING = {
     "deep-night": "Quiet hours.", dawn: "Early light.", day: "Daylight.",
     dusk: "The lamps are coming on.", night: "One light is enough.",
@@ -140,6 +143,7 @@ button.plain:hover{ color:var(--text); }
     b.style.setProperty("--dot", TOKENS.moods[b.dataset.mood].night.accent);
     b.addEventListener("click", () => {
       state.mood = state.mood === b.dataset.mood ? null : b.dataset.mood; // press again to follow the time
+      remember(state.mood);
       document.querySelectorAll(".dot").forEach((o) => o.setAttribute("aria-pressed", String(o.dataset.mood === state.mood)));
       apply();
     });
@@ -159,6 +163,12 @@ button.plain:hover{ color:var(--text); }
   if (fromUrl !== null) { state.override = fromUrl; $("time").value = hhmm(fromUrl); }
   $("time").addEventListener("input", (e) => { state.override = parseTime(e.target.value); apply(); });
   $("auto").addEventListener("click", () => { state.override = null; $("time").value = ""; apply(); });
+
+  const saved = recall();
+  if (saved && TOKENS.moods[saved]) {
+    state.mood = saved;
+    document.querySelectorAll(".dot").forEach((o) => o.setAttribute("aria-pressed", String(o.dataset.mood === saved)));
+  }
 
   apply();
   setInterval(apply, 60000);
