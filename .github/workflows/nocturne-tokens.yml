@@ -20,3 +20,8 @@ jobs:
           python-version: '3.12'
       - name: Token and contrast tests
         run: python -m unittest discover -s nocturne/tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Time-of-day phase tests
+        run: node --test nocturne/theme/phase.test.mjs
