@@ -136,7 +136,9 @@ button.plain:hover{ color:var(--text); }
       : r.phase === "deep-night" ? name + " is chosen. Deep night stays Vigil."
       : "Mood: " + name + ".";
     $("greeting").textContent = GREETING[r.phase];
-    $("phase").textContent = LABEL[r.phase] + " \u00b7 " + hhmm(m);
+    $("phase").textContent = LABEL[r.phase] + " \u00b7 " + hhmm(m) + (state.override === null ? " \u00b7 auto" : " \u00b7 preview");
+    // On auto the field follows the real clock, unless someone is typing in it.
+    if (state.override === null && document.activeElement !== $("time")) $("time").value = hhmm(m);
   }
 
   document.querySelectorAll(".dot").forEach((b) => {
@@ -162,7 +164,7 @@ button.plain:hover{ color:var(--text); }
   const fromUrl = parseTime("--nocturne-time=" + (new URLSearchParams(location.search).get("nocturne-time") || ""));
   if (fromUrl !== null) { state.override = fromUrl; $("time").value = hhmm(fromUrl); }
   $("time").addEventListener("input", (e) => { state.override = parseTime(e.target.value); apply(); });
-  $("auto").addEventListener("click", () => { state.override = null; $("time").value = ""; apply(); });
+  $("auto").addEventListener("click", () => { state.override = null; apply(); });
 
   const saved = recall();
   if (saved && TOKENS.moods[saved]) {
