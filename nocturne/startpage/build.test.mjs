@@ -26,7 +26,7 @@ test("voice: no exclamation marks in visible text or greetings", () => {
   assert.ok(!script.match(/const GREETING = \{[\s\S]*?\};/)[0].includes("!"));
 });
 
-function run(search) {
+function run(search, store = {}) {
   const attrs = {}, vars = {}, els = {};
   const el = (extra = {}) => ({
     style: { setProperty: (k, v) => { vars[k] = v; } }, dataset: {}, value: "", textContent: "", offsetWidth: 0,
@@ -40,7 +40,8 @@ function run(search) {
     querySelectorAll: () => dots,
     addEventListener() {},
   };
-  const ctx = { document, window: { addEventListener() {}, matchMedia: () => ({ matches: false }) }, location: { search },
+  const localStorage = { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = v; } };
+  const ctx = { localStorage, document, window: { addEventListener() {}, matchMedia: () => ({ matches: false }) }, location: { search },
     setInterval() {}, URLSearchParams, Date, String, Math, Object, Number, Set, Error, RegExp, JSON };
   vm.runInNewContext(script, ctx);
   return { attrs, vars, els, dots };
@@ -84,4 +85,35 @@ test("the time field shows the real clock on auto, also after leaving a preview"
   const clock = (d) => String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
   assert.ok([clock(before), clock(new Date())].includes(r.els.time.value), r.els.time.value);
   assert.match(r.els.phase.textContent, /· auto$/);
+});
+
+test("appearance setting is saved and comes back on the next new tab", () => {
+  const store = {};
+  const first = run("?nocturne-time=12:00", store);
+  first.els.mode.on.change({ target: { value: "night" } });
+  assert.equal(first.attrs["data-theme"], "night");
+  const next = run("?nocturne-time=12:00", store);
+  assert.equal(next.els.mode.value, "night");
+  assert.equal(next.attrs["data-theme"], "night");
+});
+
+test("custom hours are saved only when valid", () => {
+  const store = {};
+  const r = run("?nocturne-time=14:00", store);
+  r.els.mode.on.change({ target: { value: "custom" } });
+  r.els["start-dusk"].value = "13:00";
+  r.els["start-dusk"].on.change();
+  assert.equal(r.attrs["data-phase"], "dusk");
+  const saved = store["nocturne-appearance"];
+  r.els["start-dusk"].value = "07:00";
+  r.els["start-dusk"].on.change();
+  assert.equal(store["nocturne-appearance"], saved);
+  assert.match(r.els["settings-note"].textContent, /^Not saved/);
+  assert.equal(run("?nocturne-time=14:00", store).attrs["data-phase"], "dusk");
+});
+
+test("broken saved settings fall back to auto", () => {
+  const r = run("?nocturne-time=12:00", { "nocturne-appearance": "{oops" });
+  assert.equal(r.els.mode.value, "auto");
+  assert.equal(r.attrs["data-phase"], "day");
 });

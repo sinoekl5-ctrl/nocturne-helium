@@ -149,3 +149,27 @@ export function resolve(tokens, minutes, starts, mood) {
 export function toCss(vars) {
   return Object.entries(vars).map(([k, v]) => `--${k}:${v};`).join("");
 }
+
+// ---------- Appearance setting (brief page 5) ----------
+export const MODES = ["auto", "system", "night", "day", "custom"];
+export const MIN_PHASE_MINUTES = BLEND_MINUTES;
+
+// Custom hours must be in order, and every phase must be long enough to hold its own blend.
+export function validStarts(starts) {
+  const edges = [0, ...PHASE_ORDER.slice(1).map((p) => starts?.[p]), DAY];
+  return edges.every((v, i) => Number.isInteger(v) && (i === 0 || v - edges[i - 1] >= MIN_PHASE_MINUTES));
+}
+
+// Whatever was saved, return settings that are safe to use.
+export function cleanSettings(raw) {
+  const mode = MODES.includes(raw?.mode) ? raw.mode : "auto";
+  const starts = validStarts(raw?.starts) ? { ...raw.starts } : { ...DEFAULT_STARTS };
+  return { mode, starts };
+}
+
+export function resolveAppearance(tokens, minutes, settings, mood, systemDark) {
+  const { mode, starts } = cleanSettings(settings);
+  const fixed = mode === "system" ? (systemDark ? "night" : "day") : mode === "night" || mode === "day" ? mode : null;
+  if (fixed) return { phase: fixed, theme: tokens.phases[fixed].theme, blend: 0, vars: phaseTokens(tokens, fixed, mood) };
+  return resolve(tokens, minutes, mode === "custom" ? starts : undefined, mood);
+}

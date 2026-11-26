@@ -15,11 +15,12 @@
 :root[data-theme="day"]{ color-scheme: light; }
 *{ box-sizing:border-box; }
 html,body{ height:100%; margin:0; }
+body{ padding:24px 0; }
 body{
   background:linear-gradient(180deg,var(--bg),var(--surface));
   color:var(--text); font:13px/18px var(--ui);
   transition:background var(--dur-large),color var(--dur-large);
-  display:grid; place-items:center; position:relative; overflow:hidden;
+  display:grid; place-items:safe center; position:relative; overflow-x:hidden; overflow-y:auto;
 }
 /* Grain is made in code, never shipped as a picture. */
 body::before{
@@ -69,6 +70,12 @@ button.plain,input.time{
 }
 button.plain:hover{ color:var(--text); }
 .phase{ min-width:9em; }
+.settings{ margin-top:18px; color:var(--text-2); font-size:11.5px; }
+.settings summary{ cursor:pointer; margin-bottom:10px; }
+.settings summary:focus-visible,.field:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+.field{ font:11.5px/16px var(--ui); color:var(--text); background:var(--raised); border:1px solid var(--line); border-radius:8px; padding:5px 8px; margin-inline-start:6px; }
+.hours{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
+.hours[hidden]{ display:none; }
 .test{ margin-top:14px; display:flex; gap:8px; justify-content:center; align-items:center; font-size:11.5px; color:var(--text-2); }
 @media (prefers-reduced-motion:reduce){
   body{ transition-duration:100ms; }
@@ -100,6 +107,24 @@ button.plain:hover{ color:var(--text); }
     <button class="plain" id="save">Keep this</button>
   </div>
   <p class="quiet" id="mood-note" aria-live="polite"></p>
+  <details class="settings" id="settings">
+    <summary>Appearance</summary>
+    <label for="mode">Theme</label>
+    <select class="field" id="mode">
+      <option value="auto">Auto by time</option>
+      <option value="system">Follow system</option>
+      <option value="night">Always night</option>
+      <option value="day">Always day</option>
+      <option value="custom">Custom hours</option>
+    </select>
+    <div class="hours" id="hours" hidden>
+      <label>Dawn <input class="field" id="start-dawn" type="time"></label>
+      <label>Day <input class="field" id="start-day" type="time"></label>
+      <label>Dusk <input class="field" id="start-dusk" type="time"></label>
+      <label>Night <input class="field" id="start-night" type="time"></label>
+    </div>
+    <p id="settings-note" aria-live="polite"></p>
+  </details>
   <div class="test">
     <label for="time">Preview time</label>
     <input class="time time" id="time" type="time">
@@ -124,9 +149,28 @@ button.plain:hover{ color:var(--text); }
   const hhmm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
   const now = () => (state.override !== null ? state.override : minutesOf(new Date()));
 
+  const KEY = "nocturne-appearance";
+  const loadSettings = () => { try { return cleanSettings(JSON.parse(localStorage.getItem(KEY))); } catch { return cleanSettings(null); } };
+  let settings = loadSettings();
+  const dark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const MODE_LABEL = { auto: "auto", system: "follows system", night: "always night", day: "always day", custom: "custom hours" };
+  const EDITABLE = ["dawn", "day", "dusk", "night"];
+
+  function showSettings() {
+    $("mode").value = settings.mode;
+    $("hours").hidden = settings.mode !== "custom";
+    for (const p of EDITABLE) $("start-" + p).value = hhmm(settings.starts[p]);
+    $("settings-note").textContent = "";
+  }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(settings)); $("settings-note").textContent = "Saved."; }
+    catch { $("settings-note").textContent = "This browser could not save the setting."; }
+  }
+
   function apply() {
     const m = now();
-    const r = resolve(TOKENS, m, undefined, state.mood);
+    const r = resolveAppearance(TOKENS, m, settings, state.mood, dark ? dark.matches : true);
     for (const [k, v] of Object.entries(r.vars)) root.style.setProperty("--" + k, v);
     root.setAttribute("data-theme", r.theme);
     root.setAttribute("data-phase", r.phase);
@@ -136,7 +180,7 @@ button.plain:hover{ color:var(--text); }
       : r.phase === "deep-night" ? name + " is chosen. Deep night stays Vigil."
       : "Mood: " + name + ".";
     $("greeting").textContent = GREETING[r.phase];
-    $("phase").textContent = LABEL[r.phase] + " \u00b7 " + hhmm(m) + (state.override === null ? " \u00b7 auto" : " \u00b7 preview");
+    $("phase").textContent = LABEL[r.phase] + " \u00b7 " + hhmm(m) + (state.override === null ? " \u00b7 " + MODE_LABEL[settings.mode] : " \u00b7 preview");
     // On auto the field follows the real clock, unless someone is typing in it.
     if (state.override === null && document.activeElement !== $("time")) $("time").value = hhmm(m);
   }
@@ -171,6 +215,25 @@ button.plain:hover{ color:var(--text); }
     state.mood = saved;
     document.querySelectorAll(".dot").forEach((o) => o.setAttribute("aria-pressed", String(o.dataset.mood === saved)));
   }
+
+  $("mode").addEventListener("change", (e) => {
+    settings = cleanSettings({ mode: e.target.value, starts: settings.starts });
+    showSettings(); save(); apply();
+  });
+  for (const p of EDITABLE) $("start-" + p).addEventListener("change", () => {
+    const starts = { "deep-night": 0 };
+    for (const q of EDITABLE) starts[q] = parseTime($("start-" + q).value);
+    if (!validStarts(starts)) {
+      $("settings-note").textContent = "Not saved yet. Keep the order, with at least 30 minutes for each part and for deep night.";
+      return;
+    }
+    settings = { mode: "custom", starts };
+    save(); apply();
+  });
+  // Another open tab changed the setting or the mood.
+  window.addEventListener("storage", () => { settings = loadSettings(); showSettings(); apply(); });
+  if (dark && dark.addEventListener) dark.addEventListener("change", apply);
+  showSettings();
 
   apply();
   setInterval(apply, 60000);

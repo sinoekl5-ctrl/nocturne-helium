@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { phaseAt, parseTime, resolve, phaseTokens, hexToOklab, oklabToHex, mixHex, toCss, contrast, MIN_CONTRAST } from "./phase.mjs";
+import { phaseAt, parseTime, resolve, phaseTokens, hexToOklab, oklabToHex, mixHex, toCss, contrast, MIN_CONTRAST, resolveAppearance, validStarts, cleanSettings } from "./phase.mjs";
 
 const tokens = JSON.parse(readFileSync(new URL("../tokens/tokens.json", import.meta.url), "utf8"));
 const at = (hhmm) => parseTime(hhmm);
@@ -105,4 +105,21 @@ test("text and accent stay readable every minute of the day, in every mood", () 
           if (contrast(v[fg], v[bg]) < min) bad.push(`${mood} ${m} ${fg}/${bg}`);
     }
   assert.deepEqual(bad.slice(0, 10), [], `${bad.length} failing pairs`);
+});
+
+test("appearance modes: fixed and system ignore the clock", () => {
+  const phase = (mode, dark) => resolveAppearance(tokens, at("03:00"), { mode }, undefined, dark).phase;
+  assert.equal(phase("auto"), "deep-night");
+  assert.equal(phase("night"), "night");
+  assert.equal(phase("day"), "day");
+  assert.equal(phase("system", true), "night");
+  assert.equal(phase("system", false), "day");
+});
+
+test("custom hours: order and minimum length are enforced", () => {
+  const ok = { dawn: 360, day: 540, dusk: 1080, night: 1260 };
+  assert.equal(validStarts(ok), true);
+  for (const bad of [{ ...ok, day: 360 }, { ...ok, day: 389 }, { ...ok, night: 1411 }, { ...ok, dawn: 29 }, { ...ok, dusk: null }])
+    assert.equal(validStarts(bad), false, JSON.stringify(bad));
+  assert.equal(cleanSettings({ mode: "nope" }).mode, "auto");
 });
